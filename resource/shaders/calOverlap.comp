@@ -1,0 +1,376 @@
+#version 310 es
+layout (local_size_x = 32, local_size_y = 32) in;
+
+uniform vec2 CameraSize[6];
+uniform vec4 cp;
+uniform vec4 ra;
+
+uniform vec2 L_AlphaRange;
+uniform vec2 R_AlphaRange;
+
+uniform int bw;
+uniform int bh;
+
+uniform uint overlapMax;
+layout (std430, binding = 0) buffer overlap
+{
+    uint count[12];
+    uvec2 coord[];
+};
+#define PI  3.1415926
+float   Radius = 50.0;
+
+#define COUNT_INDEX_FFL_FLF 0u
+#define COUNT_INDEX_FFR_FRF 1u
+#define COUNT_INDEX_FLBL_BLFL 2u
+#define COUNT_INDEX_BBL_BLB 3u
+#define COUNT_INDEX_BBR_BRB 4u
+#define COUNT_INDEX_BRFR_FRBR 5u
+
+#define OVERLAP_AREA_F_FL  0u
+#define OVERLAP_AREA_F_FR  1u
+#define OVERLAP_AREA_FL_F  2u
+#define OVERLAP_AREA_FL_BL  3u
+#define OVERLAP_AREA_FR_BR  4u
+#define OVERLAP_AREA_FR_F  5u
+
+#define OVERLAP_AREA_BL_FL  6u
+#define OVERLAP_AREA_BL_B  7u
+#define OVERLAP_AREA_B_BR  8u
+#define OVERLAP_AREA_B_BL  9u
+#define OVERLAP_AREA_BR_B  10u
+#define OVERLAP_AREA_BR_FR  11u
+
+
+#define AREA_PURE_F   12u
+#define AREA_PURE_FL   13u
+#define AREA_PURE_FR     17u
+#define AREA_PURE_B     15u
+#define AREA_PURE_BL   14u
+#define AREA_PURE_BR     16u
+
+#define NONE_DEFINED_AREA 17u
+
+
+uniform float   F_FLR_Start_Angle;
+uniform float   F_FLR_End_Angle;
+
+uniform float   FLR_BLR_Start_Angle;
+uniform float   FLR_BLR_End_Angle;
+
+uniform float   B_BLR_Start_Angle;
+uniform float   B_BLR_End_Angle;
+
+uniform mat3 A[6];
+uniform mat4 RT_inv[6];
+uniform vec2 thetaRange_overlap[6];
+uniform vec2 alphaRange_overlap[6];
+uniform vec4 theta_alpha_range_overlap[6];
+
+float thetaDistanceOfOverlapArea[6];
+float alphaDistanceOfOverlapArea[6];
+
+float getGlobalTheta(float theta){
+    for(int i = 0; i < 6; i++){
+        thetaDistanceOfOverlapArea[i] = thetaRange_overlap[i][1] - thetaRange_overlap[i][0];
+    }
+
+    int index = 0;
+    float culmalateDistance = 0.0;
+
+    for(int i = 0; i < 6; i++){
+        culmalateDistance += thetaDistanceOfOverlapArea[i];
+        if(theta < culmalateDistance){
+            index = i;
+            if(i > 0){
+                theta += thetaDistanceOfOverlapArea[i - 1];
+            }
+            
+            break;
+        }
+    }
+
+    float globalTheta = theta + thetaRange_overlap[index][0];
+    return globalTheta;
+}
+
+float getGlobalAlpha(float alpha){
+    for(int i = 0; i < 6; i++){
+        alphaDistanceOfOverlapArea[i] = alphaRange_overlap[i][1] - alphaRange_overlap[i][0];
+        alphaDistanceOfOverlapArea[i] = mod((alphaDistanceOfOverlapArea[i] + 2.0*PI), 2.0*PI);//in case of the start of range great than the end of range
+    }
+
+    int index = 0;
+    float culmalateDistance = 0.0;
+
+    for(int i = 0; i < 6; i++){
+        culmalateDistance += alphaDistanceOfOverlapArea[i];
+        if(alpha < culmalateDistance){
+            index = i;
+            if(i > 0){
+                alpha += alphaDistanceOfOverlapArea[i - 1];
+            }
+            
+            break;
+        }
+    }
+
+    float globalAlpha = alpha + alphaRange_overlap[index][0];
+    return globalAlpha;
+}
+
+uint getArea(float theta, float alpha, float thetaStep, float alphaStep, out uint localDataIndex) {
+    uint r = 0u;
+    uint c = 0u;
+    uint alphaWidth = 0u;
+    if (0.0 <= theta && theta < 45.0 * (PI / 180.0)) {
+        if (0.0 <= theta && theta < F_FLR_Start_Angle)
+            return AREA_PURE_F;
+        else  {
+            if (alpha < 60.0 * (PI / 180.0) || alpha >= 310.0 * (PI / 180.0)){
+                alphaWidth = uint(mod(L_AlphaRange[1]  - L_AlphaRange[0] + 2.0*PI, 2.0*PI)/ alphaStep);
+                c = uint(mod(alpha - L_AlphaRange[0] + 2.0*PI, 2.0*PI) / alphaStep);
+                r = uint((theta - F_FLR_Start_Angle) / thetaStep);
+                localDataIndex = r * alphaWidth + c;
+                return OVERLAP_AREA_F_FL;
+            }
+            else if (alpha >= 128.57 * (PI / 180.0) && alpha <= 224.36 * (PI / 180.0)){
+                alphaWidth = uint((PI / 180.0) * (224.36  - 128.57)/ alphaStep);
+                c = uint((alpha - R_AlphaRange[0]) / alphaStep);
+                r = uint((theta - F_FLR_Start_Angle) / thetaStep);
+                localDataIndex = r * alphaWidth + c;
+                return OVERLAP_AREA_F_FR;
+            }
+        }
+    }
+
+    if (35.0 * (PI / 180.0) <= theta && theta < 85.0 * (PI / 180.0) &&
+        (alpha < 60.0 * (PI / 180.0) || alpha >= 310.0 * (PI / 180.0))) { 
+           if (F_FLR_Start_Angle <= theta && theta < F_FLR_End_Angle) {
+                alphaWidth = uint(mod(L_AlphaRange[1]  - L_AlphaRange[0] + 2.0*PI, 2.0*PI)/ alphaStep);
+                c = uint(mod(alpha - L_AlphaRange[0] + 2.0*PI, 2.0*PI) / alphaStep);
+                r = uint((theta - F_FLR_Start_Angle) / thetaStep);
+                localDataIndex = r * alphaWidth + c;
+                return OVERLAP_AREA_FL_F;
+            } else if (FLR_BLR_Start_Angle <= theta && theta < FLR_BLR_End_Angle) {
+                alphaWidth = uint( mod(L_AlphaRange[1]  - L_AlphaRange[0] + 2.0*PI, 2.0*PI)/ alphaStep);
+                c = uint(mod(alpha - L_AlphaRange[0] + 2.0*PI, 2.0*PI) / alphaStep);
+                r = uint((theta - FLR_BLR_Start_Angle) / thetaStep);
+                localDataIndex = r * alphaWidth + c;
+                return OVERLAP_AREA_FL_BL;
+            } else {
+                return AREA_PURE_FL;
+            }
+    }
+
+
+
+    if (35.0 * (PI / 180.0) <= theta && theta < 85.0 * (PI / 180.0) &&
+        128.57 * (PI / 180.0) <= alpha && alpha <= 224.36 * (PI / 180.0)) {
+        if (F_FLR_Start_Angle <= theta && theta <F_FLR_End_Angle) {
+                alphaWidth = uint((PI / 180.0) * (224.36  - 128.57)/ alphaStep);
+                c = uint((alpha - R_AlphaRange[0]) / alphaStep);
+                r = uint((theta - F_FLR_Start_Angle) / thetaStep);
+                localDataIndex = r * alphaWidth + c;
+                return OVERLAP_AREA_FR_F;
+            } else if (FLR_BLR_Start_Angle <= theta && theta <FLR_BLR_End_Angle) {
+                alphaWidth = uint((PI / 180.0) * (224.36  - 128.57)/ alphaStep);
+                c = uint((alpha - R_AlphaRange[0]) / alphaStep);
+                r = uint((theta - FLR_BLR_Start_Angle) / thetaStep);
+                localDataIndex = r * alphaWidth + c;
+                return OVERLAP_AREA_FR_BR;
+            } else {
+                return AREA_PURE_FR;
+        }
+    }
+
+    if (78.0 * (PI / 180.0) <= theta && theta < 165.0 * (PI / 180.0) &&
+        (alpha < 60.0 * (PI / 180.0) || alpha >= 310.0 * (PI / 180.0))) {
+        if (FLR_BLR_Start_Angle <= theta && theta <FLR_BLR_End_Angle) {
+            alphaWidth = uint(mod(L_AlphaRange[1]  - L_AlphaRange[0] + 2.0*PI, 2.0*PI)/ alphaStep);
+            c = uint(mod(alpha - L_AlphaRange[0] + 2.0*PI, 2.0*PI) / alphaStep);
+            r = uint((theta - FLR_BLR_Start_Angle) / thetaStep);
+            localDataIndex = r * alphaWidth + c;
+            return OVERLAP_AREA_BL_FL;
+        } else if (B_BLR_Start_Angle <= theta && theta < B_BLR_End_Angle) {
+            alphaWidth = uint(mod(L_AlphaRange[1]  - L_AlphaRange[0] + 2.0*PI, 2.0*PI)/ alphaStep);
+            c = uint(mod(alpha - L_AlphaRange[0] + 2.0*PI, 2.0*PI) / alphaStep);
+            r = uint((theta - B_BLR_Start_Angle) / thetaStep);
+            localDataIndex = r * alphaWidth + c;
+            return OVERLAP_AREA_BL_B;
+        } else {
+            return AREA_PURE_BL;
+        }
+    }
+
+    if (78.0 * (PI / 180.0) <= theta && theta < 165.0 * (PI / 180.0) &&
+        128.57 * (PI / 180.0) <= alpha && alpha <= 224.36 * (PI / 180.0)) {
+        if (FLR_BLR_Start_Angle <= theta && theta < FLR_BLR_End_Angle) {
+            alphaWidth = uint((PI / 180.0) * (224.36  - 128.57)/ alphaStep);
+            c = uint((alpha - R_AlphaRange[0]) / alphaStep);
+            r = uint((theta - FLR_BLR_Start_Angle) / thetaStep);
+            localDataIndex = r * alphaWidth + c;
+            return OVERLAP_AREA_BR_FR;
+        } else if (B_BLR_Start_Angle <= theta && theta < B_BLR_End_Angle) {
+            alphaWidth = uint((PI / 180.0) * (224.36  - 128.57)/ alphaStep);
+            c = uint((alpha - R_AlphaRange[0]) / alphaStep);
+            r = uint((theta - B_BLR_Start_Angle) / thetaStep);
+            localDataIndex = r * alphaWidth + c;
+            return OVERLAP_AREA_BR_B;
+        } else {
+            return AREA_PURE_BR;
+        }
+    }
+
+    if (155.0 * (PI / 180.0) <= theta && theta <= 180.0 * (PI / 180.0)) {
+        if (B_BLR_Start_Angle <= theta && theta < B_BLR_End_Angle) {
+            if(alpha < 60.0 * (PI / 180.0) || alpha >= 310.0 * (PI / 180.0)){
+                alphaWidth = uint( mod(L_AlphaRange[1]  - L_AlphaRange[0] + 2.0*PI, 2.0*PI)/ alphaStep);
+                c = uint(mod(alpha - L_AlphaRange[0] + 2.0*PI, 2.0*PI) / alphaStep);
+                r = uint((theta - B_BLR_Start_Angle) / thetaStep);
+                localDataIndex = r * alphaWidth + c;
+                return OVERLAP_AREA_B_BL;
+            }else if(128.57 * (PI / 180.0) <= alpha && alpha <= 224.36 * (PI / 180.0)){
+                alphaWidth = uint((PI / 180.0) * (224.36  - 128.57)/ alphaStep);
+                c = uint((alpha - R_AlphaRange[0]) / alphaStep);
+                r = uint((theta - B_BLR_Start_Angle) / thetaStep);
+                localDataIndex = r * alphaWidth + c;
+                return OVERLAP_AREA_B_BR;
+            }
+        } else {
+            return AREA_PURE_B;
+        }
+    }
+
+    return NONE_DEFINED_AREA;
+}
+
+vec2 getImgxy(mat4 RT, mat3 A, vec2 cameraDim, vec4 worldPos){
+    vec4 pos4 = RT * worldPos;
+    vec3 CTmp = vec3(pos4[0] / pos4[2], pos4[1] / pos4[2], 1.0);
+    vec3 uv3 = A * CTmp;
+    cameraDim.xy -= 3.0;
+    uv3.xy = clamp(uv3.xy, vec2(0.0, 0.0), cameraDim);
+    return uv3.xy;
+}
+
+
+uvec2 getPositionOfAreaF(vec4 pos) {
+    vec2 uv = getImgxy(RT_inv[0], A[0], CameraSize[0], pos);
+
+    return uvec2(uv);
+}
+
+uvec2 getPositionOfAreaB(vec4 pos) {
+    vec2 uv = getImgxy(RT_inv[3], A[3], CameraSize[3], pos);
+    return uvec2(uv);
+}
+
+uvec2 getPositionOfAreaFL(vec4 pos) {
+    vec2 uv = getImgxy(RT_inv[1], A[1], CameraSize[1], pos);
+    return uvec2(uv);
+}
+
+uvec2 getPositionOfAreaFR(vec4 pos) {
+    vec2 uv = getImgxy(RT_inv[2], A[2], CameraSize[2], pos);
+    return uvec2(uv);
+}
+
+uvec2 getPositionOfAreaBL(vec4 pos) {
+    vec2 uv = getImgxy(RT_inv[4], A[4], CameraSize[4], pos);
+    return uvec2(uv);
+}
+
+uvec2 getPositionOfAreaBR(vec4 pos) {
+    vec2 uv = getImgxy(RT_inv[5], A[5], CameraSize[5], pos);
+    return uvec2(uv);
+}
+
+uvec2 getPositionOfArea(uint whichArea, vec4 pos){
+    switch (whichArea) {
+        case OVERLAP_AREA_F_FL:
+        case OVERLAP_AREA_F_FR:
+            return getPositionOfAreaF(pos);
+        case OVERLAP_AREA_B_BL:
+        case OVERLAP_AREA_B_BR:
+            return getPositionOfAreaB(pos);
+        case OVERLAP_AREA_FL_F:
+        case OVERLAP_AREA_FL_BL:
+            return getPositionOfAreaFL(pos);
+        case OVERLAP_AREA_FR_BR:
+        case OVERLAP_AREA_FR_F:
+            return getPositionOfAreaFR(pos);
+        case OVERLAP_AREA_BL_B:
+        case OVERLAP_AREA_BL_FL:
+            return getPositionOfAreaBL(pos);
+        case OVERLAP_AREA_BR_B:
+        case OVERLAP_AREA_BR_FR:
+            return getPositionOfAreaBR(pos);       
+    }
+}
+
+uint getPairedArea(uint whichArea){
+ switch (whichArea) {
+        case OVERLAP_AREA_F_FL:
+            return OVERLAP_AREA_FL_F;
+        case OVERLAP_AREA_F_FR:
+            return OVERLAP_AREA_FR_F;
+        case OVERLAP_AREA_B_BL:
+            return OVERLAP_AREA_BL_B;
+        case OVERLAP_AREA_B_BR:
+            return OVERLAP_AREA_BR_B;
+        case OVERLAP_AREA_FL_F:
+            return OVERLAP_AREA_F_FL;
+        case OVERLAP_AREA_FL_BL:
+            return OVERLAP_AREA_BL_FL;
+        case OVERLAP_AREA_FR_BR:
+            return OVERLAP_AREA_BR_FR;
+        case OVERLAP_AREA_FR_F:
+            return OVERLAP_AREA_F_FR;
+        case OVERLAP_AREA_BL_B:
+            return OVERLAP_AREA_B_BL;
+        case OVERLAP_AREA_BL_FL:
+            return OVERLAP_AREA_FL_BL;
+        case OVERLAP_AREA_BR_B:
+            return OVERLAP_AREA_B_BR;
+        case OVERLAP_AREA_BR_FR:
+            return OVERLAP_AREA_FR_BR;       
+    }
+}
+
+shared uint sharedData[gl_WorkGroupSize.y];
+void main() {
+    vec2 pos = vec2(gl_GlobalInvocationID.xy);
+    float thetaStep = PI / float(bw);
+    float alphaStep = 2.0 * PI / float(bh);
+    float j = pos.x;
+    float i = pos.y;
+    float theta = (i) * thetaStep;
+    float alpha = (j) * alphaStep;
+    //theta = getGlobalTheta(theta);
+    //alpha = getGlobalAlpha(alpha);
+    float x = Radius * sin(theta) * cos(alpha);
+    float y = Radius * sin(theta) * sin(alpha);
+    float z = Radius * cos(theta);
+    vec4 worldP = vec4(z, x, y, 1.0);
+    uint localDataIndex = 0u;
+    uint whichArea = getArea(theta, alpha, thetaStep, alphaStep, localDataIndex);
+    uint pairedArea = whichArea;
+    uint maxPointsPerArea = overlapMax;
+    uint dataIndex = pairedArea * maxPointsPerArea + localDataIndex;
+
+    if(whichArea < 12u){
+        if(localDataIndex < maxPointsPerArea){
+            coord[dataIndex] = getPositionOfArea(whichArea, worldP);
+            pairedArea = getPairedArea(whichArea);
+            coord[pairedArea * maxPointsPerArea + localDataIndex] = getPositionOfArea(pairedArea, worldP);
+        }else{
+            atomicExchange(count[whichArea], maxPointsPerArea);
+            pairedArea = getPairedArea(whichArea);
+            atomicExchange(count[pairedArea], maxPointsPerArea);
+        }       
+    }else{// to do something to handle this error case, usually there is no chance to come here.
+
+    }
+   
+}
