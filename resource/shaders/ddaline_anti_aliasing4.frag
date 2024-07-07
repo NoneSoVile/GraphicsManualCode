@@ -6,6 +6,10 @@ uniform vec2 u_resolution; // The resolution of the screen
 uniform vec2 u_point1;     // The first point of the line (x1, y1)
 uniform vec2 u_point2;     // The second point of the line (x2, y2)
 uniform float u_lineWidth; // The width of the line
+uniform vec4 u_lineColor = vec4(1.0, 1.0, 0.0, 1.0);  // The color of the line
+uniform vec4 u_bgColor =  vec4(0.0, 0.0, 0.0, 1.0);   // The background color
+uniform float fadeRangeFactor = 0.2;
+uniform float edgeSoftness = 0.02; // Adjust this value for the desired softness at the ends
 
 void main()
 {
@@ -42,11 +46,10 @@ void main()
     // Calculate the alpha value for anti-aliasing
     float halfLineWidth = u_lineWidth / u_resolution.x * 0.5;
     //float alpha = smoothstep(halfLineWidth, 0.0, distanceToLine);
-    float fadeRange = halfLineWidth * 0.2; // Adjust the fade range for sharper edges
+    float fadeRange = halfLineWidth * fadeRangeFactor; // Adjust the fade range for sharper edges
     float alpha = smoothstep(halfLineWidth + fadeRange, halfLineWidth - fadeRange, distanceToLine);
 
-    vec4 u_lineColor = vec4(1.0, 1.0, 1.0, 1.0); ;  // The color of the line
-    vec4 u_bgColor =  vec4(0.0, 0.0, 0.0, 1.0);;    // The background color
+
      // Apply gamma correction to the line color
     vec4 correctedLineColor = pow(u_lineColor, vec4(1.0/2.2));
 
@@ -54,7 +57,7 @@ void main()
     vec4 color = mix(u_bgColor, correctedLineColor, alpha);
 
         // Determine if the fragment is within the line segment, including anti-aliasing for the ends
-    float edgeSoftness = 0.1; // Adjust this value for the desired softness at the ends
+    
     float endFadeRange = length  * edgeSoftness;
     float endAlpha = smoothstep(0.0, endFadeRange, parallelDistance) * smoothstep(0.0, endFadeRange, length - parallelDistance);
         // Combine the alpha values for both the perpendicular and parallel distances

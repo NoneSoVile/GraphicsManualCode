@@ -27,8 +27,8 @@ void DDALine::loadShader(){
 }
 
 void DDALine::init(int w, int h) {
-	u_point1 = vec2f(0, 0);
-	u_point2 = vec2f(100, 100);
+	u_point1 = vec2f(10, 100);
+	u_point2 = vec2f(300, 100);
 	u_resolution = vec2f(w, h);
 	u_lineWidth = 10.0;
      /*create shaders
@@ -110,9 +110,13 @@ void DDALine::updateUI(int w, int h) {
         static int counter = 0;
 
         ImGui::Begin("Helloxxx, world!", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoBackground);                          // Create a window called "Hello, world!" and append into it.
-        ImGui::SliderFloat("u_lineWidth", &u_lineWidth, 1.0f, 350.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-		ImGui::SliderFloat2("u_point1", u_point1._array, 1.0f, 850.0f); 
-		ImGui::SliderFloat2("u_point2", u_point2._array, 10, 1500); 
+        ImGui::SliderFloat("u_lineWidth", &u_lineWidth, 1.0f, 1350.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+		ImGui::SliderFloat2("u_point1", u_point1._array, 15.0f, 2850.0f); 
+		ImGui::SliderFloat2("u_point2", u_point2._array, 15, 2500); 
+		ImGui::SliderFloat4("u_lineColor", u_lineColor._array, 0, 1);
+		ImGui::SliderFloat4("u_bgColor", u_bgColor._array, 0, 1);
+		ImGui::SliderFloat("fadeRangeFactor", &fadeRangeFactor, 0.f, 1.0f);
+		ImGui::SliderFloat("edgeSoftness", &edgeSoftness, .0f, 1.0f);
         ImGui::SameLine();
         ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
         ImGui::End();
@@ -127,6 +131,10 @@ void DDALine::run(float w, float h) {
 	renderShader->setUniform2fv("u_point2", u_point2, 1);
 	renderShader->setUniform2fv("u_resolution", u_resolution, 1);
 	renderShader->setUniform1f("u_lineWidth", u_lineWidth);
+	renderShader->setUniform1f("fadeRangeFactor", fadeRangeFactor);
+	renderShader->setUniform1f("edgeSoftness", edgeSoftness);
+	renderShader->setUniform4fv("u_lineColor", u_lineColor, 1);
+	renderShader->setUniform4fv("u_bgColor", u_bgColor, 1);
 	glBindVertexArray(VAO); CHECK_GL;
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO); CHECK_GL;
