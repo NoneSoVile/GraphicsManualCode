@@ -12,7 +12,7 @@ void DDALine::loadShader(){
      /*create shaders
     */
     string vertexShaderFile = resourceFolder + std::string("shaders/basic330.vert");
-    string fragShaderFile = resourceFolder + std::string("shaders/ddaline2.frag");
+    string fragShaderFile = resourceFolder + std::string("shaders/ddaline_anti_aliasing4.frag");
 
     renderShader = std::make_shared<Shader>();
     renderShader->setShader(vertexShaderFile.c_str(), fragShaderFile.c_str());//geometryShaderFile.c_str()
@@ -110,9 +110,9 @@ void DDALine::updateUI(int w, int h) {
         static int counter = 0;
 
         ImGui::Begin("Helloxxx, world!", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoBackground);                          // Create a window called "Hello, world!" and append into it.
-        ImGui::SliderFloat("u_lineWidth", &u_lineWidth, 1.0f, 50.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-		ImGui::SliderFloat2("u_point1", u_point1._array, 1.0f, 350.0f); 
-		ImGui::SliderFloat2("u_point2", u_point2._array, 100, 1500); 
+        ImGui::SliderFloat("u_lineWidth", &u_lineWidth, 1.0f, 350.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+		ImGui::SliderFloat2("u_point1", u_point1._array, 1.0f, 850.0f); 
+		ImGui::SliderFloat2("u_point2", u_point2._array, 10, 1500); 
         ImGui::SameLine();
         ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
         ImGui::End();
