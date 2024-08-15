@@ -6,6 +6,7 @@
 #include "PhysicsCurve.h"
 #include "Sprite2d.h"
 #include "DDALine.h"
+#include "FFTLine.h"
 #include "MatTester.h"
 #include <GLFW/glfw3.h>
 #include "imgui.h"
@@ -157,12 +158,12 @@ int main(int, char**)
 	
 	ShaderTester shaderTester;
 	GeometryShaderTester geoShaderTester;
-	GaussianFilterShaderTester gaussianFilterTester;
+	GaussianFilterShaderTester sprite;
 	PhysicsCurve curve;
-	DDALine sprite;
+	//FFTLine sprite;
+	//DDALine sprite;
 	//shaderTester.init();
 	//geoShaderTester.init();
-	//gaussianFilterTester.init();
 	//curve.init();
 	sprite.init(screenW, screenH);
 

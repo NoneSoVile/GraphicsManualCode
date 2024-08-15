@@ -6,11 +6,16 @@
 #include "FileConfig.h"
 #include "Common.h"
 
+#ifndef IMGUI_DEFINE_MATH_OPERATORS
+#define IMGUI_DEFINE_MATH_OPERATORS
+#endif
+#include "imgui.h"
+
 using MB::matrix4f;
 using MB::vec3f;
 using MB::vec2f;
 
-void GaussianFilterShaderTester::init() {
+void GaussianFilterShaderTester::init(float w, float h) {
     /*create shaders
     */
     string vertexShaderFile = resourceFolder + std::string("shaders/basic.vert");
@@ -51,42 +56,57 @@ void GaussianFilterShaderTester::init() {
         loadAssets1();
 
     //kernel data
-    int kernelSize = 71;
-    kernel_W = kernelSize;
-    kernel_H = kernelSize;
-    int bufferSize = kernel_W * kernel_H;
-    kernelBuffer = new float[bufferSize];
+    int kernelSize = 15;
 
+    recalculateKernel(kernelSize, kernelSize, BOTH);
+    
+    //load textures
+    loadTexture();
+}
+#define MAX_KERNEL_BUF 400*400
+void GaussianFilterShaderTester::recalculateKernel(int w, int h, BLUR_DIR dir){
+    kernel_W = w;
+    kernel_H = h;
+    int bufferSize = MAX_KERNEL_BUF;// 
+    int dataSize = kernel_W * kernel_H;
+    if (!kernelBuffer) {
+        kernelBuffer = new float[MAX_KERNEL_BUF];
+    }
+     
 
+    if(dir == VERTICAL){
+        w = 2;
+    }else if(dir == HORIZONTAL){
+        h = 2;
+    }
+    int beginX = -w / 2;
+    int beginY = -h / 2;
     float sum = 0.0;
     float sigma = 13.5;
-    int size = kernelSize;
-    for (int x = -size/2; x <= size/2; x++) {
-        for (int y = -size/2; y <= size/2; y++) {
-            kernelBuffer[(x + size/2)*size + y + size/2] = exp(-(x*x + y*y) / (2*sigma*sigma)) / (2*PI*sigma*sigma);
-            sum += kernelBuffer[(x + size/2)*size + y + size/2];
+    int size = w;  //or h
+    for (int x = beginX; x < w/2; x++) {
+        for (int y = beginY; y < h/2; y++) {
+            kernelBuffer[(x + w/2)*h + y + h/2] = exp(-(x*x + y*y) / (2*sigma*sigma)) / (2*PI*sigma*sigma);
+            sum += kernelBuffer[(x + w/2)*h + y + h/2];
         }
     }
 
 
-// Normalize the kernel
-
-   for (int x = 0; x < size; x++) {
-        for (int y = 0; y < size; y++) {
-            kernelBuffer[x*size + y] /= sum;
+  // Normalize the kernel
+   for (int x = 0; x < w; x++) {
+        for (int y = 0; y < h; y++) {
+            kernelBuffer[x*h + y] /= sum;
         }
     }
 
     //init kernel
     SetupSSBO(Filter_Kernel_Buffer, kernelBuffer, sizeof(float), bufferSize);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(float) * bufferSize, kernelBuffer, GL_STATIC_COPY);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(float) * dataSize, kernelBuffer, GL_STATIC_COPY);
     blurShader->Use(0);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, Filter_Kernel_Buffer);
     blurShader->setUniform1i("kernel_W", kernel_W);
     blurShader->setUniform1i("kernel_H", kernel_H);
 
-    //load textures
-    loadTexture();
 }
 
 
@@ -159,12 +179,14 @@ void GaussianFilterShaderTester::loadRenderState(){
 }
 
 void GaussianFilterShaderTester::renderFrame0(int w, int h){
-    doCompute();
-	matrix4f model;
+    recalculateKernel(kernel_W, kernel_H, VERTICAL);
+    doCompute(ourTexture, writeTexture1, VERTICAL);
+    recalculateKernel(kernel_W, kernel_H, HORIZONTAL);
+    doCompute(writeTexture1, writeTexture2, HORIZONTAL);
 
 	CHECK_GL;
     renderShader->Use();
-    renderShader->UseAndBindTexture("ourTexture", writeTexture);
+    renderShader->UseAndBindTexture("ourTexture", writeTexture2);
 	glBindVertexArray(VAO); CHECK_GL;
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO); CHECK_GL;
@@ -188,7 +210,8 @@ void GaussianFilterShaderTester::renderFrame1(int w, int h){
    
 }
 
-void GaussianFilterShaderTester::doCompute(){
+void GaussianFilterShaderTester::doCompute(GLuint& inputTexture, GLuint& outputTexture, BLUR_DIR blurDir){
+    
     int dim_x = 16;
 	int dim_y = 16;
 	static float time = 0.0;
@@ -196,15 +219,35 @@ void GaussianFilterShaderTester::doCompute(){
 	blurShader->Use(0);CHECK_GL;
     blurShader->setUniform1i("kernel_W", kernel_W);CHECK_GL;
     blurShader->setUniform1i("kernel_H", kernel_H);CHECK_GL;
+    blurShader->setUniform1i("dir", blurDir); CHECK_GL;
 	//blurShader->setUniform1f("time", time);
 	time += 0.01;
 	//computeShader[threadid]->setUniform1i("threadid", threadid);
-	SetupTexture(writeTexture, srcImgWidth, srcImgHeight);
-    glBindImageTexture(1, ourTexture, 0, GL_FALSE, 0, GL_READ_ONLY, GL_RGBA8UI); CHECK_GL;
-	glBindImageTexture(2, writeTexture, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA8UI); CHECK_GL;
+	SetupTexture(outputTexture, srcImgWidth, srcImgHeight);
+    glBindImageTexture(1, inputTexture, 0, GL_FALSE, 0, GL_READ_ONLY, GL_RGBA8UI); CHECK_GL;
+	glBindImageTexture(2, outputTexture, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA8UI); CHECK_GL;
     glDispatchCompute((srcImgWidth + dim_x - 1) / dim_x, (srcImgHeight + dim_y - 1) / dim_y, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT|GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
+}
+
+void GaussianFilterShaderTester::updateUI(int w, int h){
+    // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+
+    ImGui::SetNextWindowBgAlpha(0.5f);
+    // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
+    {
+        static int counter = 0;
+
+        ImGui::Begin("Helloxxx, world!", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoBackground);                          // Create a window called "Hello, world!" and append into it.
+        ImGui::SliderInt("kernel size W", &kernel_W, 1, 400);
+        ImGui::SliderInt("kernel size H", &kernel_H, 1, 400); 
+
+        ImGui::SameLine();
+        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+        ImGui::End();
+    }
 }
 
 void GaussianFilterShaderTester::run(float w, float h) {
@@ -216,4 +259,5 @@ void GaussianFilterShaderTester::run(float w, float h) {
     else if(shaderType == 1){
         renderFrame1(w, h);
     }
+    updateUI(w, h);
 }
