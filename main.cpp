@@ -158,9 +158,9 @@ int main(int, char**)
 	
 	ShaderTester shaderTester;
 	GeometryShaderTester geoShaderTester;
-	GaussianFilterShaderTester sprite;
+	//GaussianFilterShaderTester sprite;
 	PhysicsCurve curve;
-	//FFTLine sprite;
+	FFTLine sprite;
 	//DDALine sprite;
 	//shaderTester.init();
 	//geoShaderTester.init();

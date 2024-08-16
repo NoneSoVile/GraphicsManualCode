@@ -1,0 +1,29 @@
+#version 310 es
+
+layout(local_size_x = 1, local_size_y = 64) in;
+
+layout (rgba8ui, binding = 1) uniform readonly highp uimage2D inputTexture;
+layout (rgba8ui, binding = 2) uniform writeonly highp uimage2D outputTexture;
+
+void main()
+{
+    ivec2 id = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(outputTexture);
+
+    if (id.x >= size.x || id.y >= size.y) return;
+
+    vec4 sum = vec4(0.0);
+    float N = float(size.y);
+
+    for (int n = 0; n < size.y; n++) {
+        float angle = -2.0 * 3.14159265359 * float(id.y * n) / N;
+        vec2 freq = vec2(cos(angle), sin(angle));
+        vec4 samplepixel = vec4(imageLoad(inputTexture, ivec2(id.x, n)));
+        sum += vec4(samplepixel.r * freq.x - samplepixel.g * freq.y, samplepixel.r * freq.y + samplepixel.g * freq.x, 0.0, 1.0);
+    }
+
+    // Normalize the result by dividing by N
+    sum /= N;
+
+    imageStore(outputTexture, id, uvec4(sum*255.0));
+}
