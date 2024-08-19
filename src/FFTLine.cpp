@@ -430,7 +430,7 @@ int FFTLine::grayfft() {
     Mat filter1 = CREATE_BAND_STOP_FILTER(size, 1);
     Mat filter2 = CREATE_BAND_STOP_FILTER(size, 2);
     Mat filter3 = CREATE_BAND_STOP_FILTER(size, 3);
-    Mat filter4 = createGaussianFilter(size, 1, sigma); //createGaussianFilter(size, 1, sigma);//
+    Mat filter4 = CREATE_BAND_STOP_FILTER(size, 4); //createGaussianFilter(size, 1, sigma);//
 
     // Split the complex image into real and imaginary parts
     split(complexImage, planes);
@@ -522,7 +522,7 @@ int FFTLine::colorFFT() {
     Mat filter1 = CREATE_BAND_STOP_FILTER(size, 1);
     Mat filter2 = CREATE_BAND_STOP_FILTER(size, 2);
     Mat filter3 = CREATE_BAND_STOP_FILTER(size, 3);
-    Mat filter4 = createGaussianFilter(size, 1, sigma);//
+    Mat filter4 = CREATE_BAND_STOP_FILTER(size, 4);//createGaussianFilter(size, 1, sigma);
 
     // Apply the band-pass filter to each channel in the frequency domain
     APPLY_BAND_FILTER_COLOR(1);
