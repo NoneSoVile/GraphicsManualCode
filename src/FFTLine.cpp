@@ -202,7 +202,7 @@ void FFTLine::updateTextureUI(int w, int h){
     SLIDER_FLOAT(3);
     SLIDER_FLOAT(4);
 
-    ImGui::SliderFloat("sigma", &sigma, 0.f, 100.0f);
+    ImGui::SliderFloat("sigma", &sigma, 0.f, 800.0f);
 
     if (ImGui::Button("reset band pass filter")) {
         resetBandPassFilter();
@@ -210,6 +210,12 @@ void FFTLine::updateTextureUI(int w, int h){
     if (ImGui::Button("reset band stop filter")) {
         resetBandStopFilter();
     }
+
+    if (ImGui::Button("gauss filter")) {
+        gaussfilter();
+    }
+
+    ImGui::SliderInt("kernelSize", &kernelSize, 1, 800);
 
 
 	ImGui::End();
@@ -234,6 +240,82 @@ void FFTLine::resetBandPassFilter() {
 
 using namespace cv;
 using namespace std;
+
+// Function to perform FFT
+void fft2(const Mat& src, Mat& complexI) {
+    Mat planes[] = { Mat_<float>(src), Mat::zeros(src.size(), CV_32F) };
+    merge(planes, 2, complexI);
+    dft(complexI, complexI);
+}
+
+// Function to perform inverse FFT
+void ifft2(Mat& complexI, Mat& dst) {
+    idft(complexI, complexI, DFT_SCALE | DFT_REAL_OUTPUT);
+    dst = Mat_<float>(complexI);
+}
+
+// Function to multiply two Fourier-transformed images (complex values)
+void mulSpectrumsComplex(const Mat& A, const Mat& B, Mat& C) {
+    Mat planesA[2], planesB[2];
+    split(A, planesA);
+    split(B, planesB);
+
+    Mat planesC[2];
+    planesC[0] = planesA[0].mul(planesB[0]) - planesA[1].mul(planesB[1]);  // Real part
+    planesC[1] = planesA[0].mul(planesB[1]) + planesA[1].mul(planesB[0]);  // Imaginary part
+
+    merge(planesC, 2, C);
+}
+
+// Function to apply a circular shift (compensate for FFT shift)
+Mat circShift(const Mat& in, int dx, int dy) {
+    Mat out = Mat::zeros(in.size(), in.type());
+    int h = in.rows, w = in.cols;
+    for (int y = 0; y < h; y++) {
+        for (int x = 0; x < w; x++) {
+            int newX = (x + dx) % w;
+            int newY = (y + dy) % h;
+            if (newX < 0) newX += w;
+            if (newY < 0) newY += h;
+            out.at<float>(newY, newX) = in.at<float>(y, x);
+        }
+    }
+    return out;
+}
+
+// Function to perform FFT-based convolution
+Mat fftConvolve(const Mat& image, const Mat& kernel) {
+    // Expand the image and kernel to the optimal size
+    Size dftSize;
+    dftSize.width = getOptimalDFTSize(image.cols + kernel.cols - 1);
+    dftSize.height = getOptimalDFTSize(image.rows + kernel.rows - 1);
+
+    // Pad image and kernel
+    Mat paddedImage, paddedKernel;
+    copyMakeBorder(image, paddedImage, 0, dftSize.height - image.rows, 0, dftSize.width - image.cols, BORDER_CONSTANT, Scalar::all(0));
+    copyMakeBorder(kernel, paddedKernel, 0, dftSize.height - kernel.rows, 0, dftSize.width - kernel.cols, BORDER_CONSTANT, Scalar::all(0));
+
+    // Perform FFT on both image and kernel
+    Mat complexImage, complexKernel;
+    fft2(paddedImage, complexImage);
+    fft2(paddedKernel, complexKernel);
+
+    // Multiply in the frequency domain (convolution)
+    Mat complexResult;
+    mulSpectrumsComplex(complexImage, complexKernel, complexResult);
+
+    // Perform inverse FFT to get the convolved image
+    Mat result;
+    ifft2(complexResult, result);
+
+    // Circular shift to correct the offset
+    result = circShift(result, -kernel.cols / 2, -kernel.rows / 2);
+    // Crop the result to the original image size
+    result = result(Rect(0, 0, image.cols, image.rows));
+    // Normalize the result to the 0-255 range
+    normalize(result, result, 0, 255, NORM_MINMAX, CV_8U);
+    return result;
+}
 
 // Function to create a band-pass filter mask
 Mat createBandPassFilter(Size size, float lowFreq, float highFreq) {
@@ -275,12 +357,14 @@ Mat createBandStopFilter(Size size, float lowFreq, float highFreq) {
 // Function to create a Gaussian filter mask in the frequency domain
 Mat createGaussianFilter(Size size, float radius, float sigma) {
     Mat filter(size, CV_32F, Scalar::all(1));
+    //return filter;
 
     Point center = Point(size.width / 2, size.height / 2);
+    float maxDist = (center.x * center.x + center.y * center.y);
 
-    for (int i = 0; i < radius*size.height; ++i) {
-        for (int j = 0; j < radius*size.width; ++j) {
-            float distance = pow(j - center.x, 2) + pow(i - center.y, 2);
+    for (int i = 0; i < size.height; ++i) {
+        for (int j = 0; j < size.width; ++j) {
+            float distance = (pow(j - center.x, 2) + pow(i - center.y, 2));
             filter.at<float>(i, j) = exp(-distance / (2.0 * sigma * sigma));
         }
     }
@@ -300,7 +384,7 @@ Mat createGaussianFilter(Size size, float radius, float sigma) {
 
 int FFTLine::grayfft() {
     // Load the input image
-    string name = "resource/images/bathroom.jpg";
+    string name = "resource/images/bathroom_adj1.jpg";
     Mat image = imread(name, IMREAD_GRAYSCALE);//IMREAD_GRAYSCALE
     if (image.empty()) {
         cout << "Could not open or find the image!" << endl;
@@ -324,7 +408,7 @@ int FFTLine::grayfft() {
     Mat filter1 = CREATE_BAND_STOP_FILTER(size, 1);
     Mat filter2 = CREATE_BAND_STOP_FILTER(size, 2);
     Mat filter3 = CREATE_BAND_STOP_FILTER(size, 3);
-    Mat filter4 = CREATE_BAND_STOP_FILTER(size, 4); //createGaussianFilter(size, 1, sigma);//
+    Mat filter4 = createGaussianFilter(size, 1, sigma); //createGaussianFilter(size, 1, sigma);//
 
     // Split the complex image into real and imaginary parts
     split(complexImage, planes);
@@ -437,6 +521,31 @@ int FFTLine::colorFFT() {
 
     // Display the result
     imshow("Filtered Image", filteredImage);
+    return 0;
+}
+
+int FFTLine::gaussfilter()
+{
+    // Load the input image (grayscale)
+    string name = "resource/images/bathroom_adj1.jpg";
+    Mat image = imread(name, IMREAD_GRAYSCALE);//IMREAD_GRAYSCALE
+    if (image.empty()) {
+        cout << "Could not open or find the image!" << endl;
+        return -1;
+    }
+
+    // Create a Gaussian kernel
+
+    Mat kernel = getGaussianKernel(kernelSize, -1, CV_64F);
+    kernel = kernel * kernel.t();  // Create 2D Gaussian kernel by outer product
+
+    // Perform FFT-based convolution
+    Mat result = fftConvolve(image, kernel);
+
+    // Display the result
+    
+    imshow("FFT-based Convolution Result", result);
+
     return 0;
 }
 

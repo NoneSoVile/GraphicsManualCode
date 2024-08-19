@@ -62,6 +62,7 @@ protected:
     float highFreq4 = 1.f; // High-frequency cutoff (e.g., 50% of the max frequency)
 
     float sigma = 1;
+    int kernelSize = 79;  // Example large kernel size
 
 protected:
     void loadShader();
@@ -77,6 +78,7 @@ protected:
     void doCompute(std::shared_ptr<Shader> shader, GLuint& inputTexture, GLuint& outputTexture, FFT_DIR dir);
     int  grayfft();
     int  colorFFT();
+    int gaussfilter();
 
     void resetBandStopFilter();
     void resetBandPassFilter();
