@@ -211,8 +211,12 @@ void FFTLine::updateTextureUI(int w, int h){
         resetBandStopFilter();
     }
 
-    if (ImGui::Button("gauss filter")) {
-        gaussfilter();
+    if (ImGui::Button("gauss filter GRAY SCALE")) {
+        gaussfilterGrayscale();
+    }
+
+    if (ImGui::Button("gauss filter RGB")) {
+        gaussfilterRGB();
     }
 
     ImGui::SliderInt("kernelSize", &kernelSize, 1, 800);
@@ -314,6 +318,24 @@ Mat fftConvolve(const Mat& image, const Mat& kernel) {
     result = result(Rect(0, 0, image.cols, image.rows));
     // Normalize the result to the 0-255 range
     normalize(result, result, 0, 255, NORM_MINMAX, CV_8U);
+    return result;
+}
+
+// Function to apply FFT-based convolution to each channel of an RGB image
+Mat fftConvolveRGB(const Mat& image, const Mat& kernel) {
+    // Split the image into its three channels
+    vector<Mat> channels(3);
+    split(image, channels);
+
+    // Apply FFT-based convolution to each channel separately
+    for (int i = 0; i < 3; i++) {
+        channels[i] = fftConvolve(channels[i], kernel);
+    }
+
+    // Merge the channels back together
+    Mat result;
+    merge(channels, result);
+
     return result;
 }
 
@@ -434,7 +456,7 @@ int FFTLine::grayfft() {
     magImage = magImage(Rect(0, 0, image.cols, image.rows));
 
     // Normalize the magnitude image for better visualization
-    normalize(magImage, magImage, 0, 1, NORM_MINMAX);
+    normalize(magImage, magImage, 0, 255, NORM_MINMAX, CV_8U);
 
     // Display the result
     imshow("Filtered Image", magImage);
@@ -500,7 +522,7 @@ int FFTLine::colorFFT() {
     Mat filter1 = CREATE_BAND_STOP_FILTER(size, 1);
     Mat filter2 = CREATE_BAND_STOP_FILTER(size, 2);
     Mat filter3 = CREATE_BAND_STOP_FILTER(size, 3);
-    Mat filter4 = CREATE_BAND_STOP_FILTER(size, 4); //createGaussianFilter(size, 1, sigma);//
+    Mat filter4 = createGaussianFilter(size, 1, sigma);//
 
     // Apply the band-pass filter to each channel in the frequency domain
     APPLY_BAND_FILTER_COLOR(1);
@@ -517,14 +539,14 @@ int FFTLine::colorFFT() {
     merge(channels, filteredImage);
 
     // Normalize the result for display
-    normalize(filteredImage, filteredImage, 0, 1, NORM_MINMAX);
+    normalize(filteredImage, filteredImage, 0, 255, NORM_MINMAX, CV_8U);
 
     // Display the result
     imshow("Filtered Image", filteredImage);
     return 0;
 }
 
-int FFTLine::gaussfilter()
+int FFTLine::gaussfilterGrayscale()
 {
     // Load the input image (grayscale)
     string name = "resource/images/bathroom_adj1.jpg";
@@ -544,6 +566,30 @@ int FFTLine::gaussfilter()
 
     // Display the result
     
+    imshow("FFT-based Convolution Result", result);
+
+    return 0;
+}
+
+int FFTLine::gaussfilterRGB(){
+    // Load the input image (grayscale)
+    string name = "resource/images/bathroom_adj1.jpg";
+    Mat image = imread(name);//IMREAD_GRAYSCALE
+    if (image.empty()) {
+        cout << "Could not open or find the image!" << endl;
+        return -1;
+    }
+
+    // Create a Gaussian kernel
+
+    Mat kernel = getGaussianKernel(kernelSize, -1, CV_64F);
+    kernel = kernel * kernel.t();  // Create 2D Gaussian kernel by outer product
+
+    // Perform FFT-based convolution
+    Mat result = fftConvolveRGB(image, kernel);
+
+    // Display the result
+
     imshow("FFT-based Convolution Result", result);
 
     return 0;

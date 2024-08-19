@@ -78,7 +78,8 @@ protected:
     void doCompute(std::shared_ptr<Shader> shader, GLuint& inputTexture, GLuint& outputTexture, FFT_DIR dir);
     int  grayfft();
     int  colorFFT();
-    int gaussfilter();
+    int gaussfilterGrayscale();
+    int gaussfilterRGB();
 
     void resetBandStopFilter();
     void resetBandPassFilter();
