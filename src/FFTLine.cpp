@@ -142,7 +142,7 @@ void FFTLine::loadMesh()
 
 void FFTLine::loadTexture()
 {
-    string name = "resource/images/steelball.png";
+    string name = "resource/images/bathroom.jpg";
 	cv::Mat img = cv::imread(name, cv::IMREAD_UNCHANGED);
 	if (img.empty())
 	{

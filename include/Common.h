@@ -29,6 +29,7 @@ bool is_file_exist(const char* fileName);
 double getCurrentTimeSeconds();
 
 int SetupTexture(GLuint& texture, int width, int height);
+int SetupTexture_rgba32(GLuint& texture, int width, int height);
 int SetupTextureData(GLuint& texture, int width, int height, const void* data);
 int SetupBufferData(GLuint& buffer, int size, const void* data);
 int SetupSSBO(GLuint& buffer, const void* data, int elemSize, int bufSize);

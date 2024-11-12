@@ -122,7 +122,7 @@ void RigidBody2D::CalcLoads(void)
     vMoment += Mb;
 }
 
-void PhysicsCurve::init() {
+void PhysicsCurve::init(int w, int h) {
     /*create shaders
     */
     string vertexShaderFile = resourceFolder + std::string("shaders/line.vert");
@@ -245,8 +245,8 @@ void PhysicsCurve::loadRenderState(){
 	Config fileConfig;
     fileConfig.LoadConfig("resourceglshow.txt");
 	zRotation = fileConfig.Read("zRotation", 0.0);
-	usingGeoShader = fileConfig.Read("usingGeoShader", 0);
-	lineWidth = fileConfig.Read("lineWidth", 0.2);
+	usingGeoShader = fileConfig.Read("usingGeoShader", 1);
+	lineWidth = fileConfig.Read("lineWidth", 3.2);
     enableGLMultisample = fileConfig.Read("enableGLMultisample", 0);
     drawMode = fileConfig.Read("drawMode", drawMode);
     

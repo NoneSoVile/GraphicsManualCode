@@ -107,6 +107,23 @@ int SetupTexture(GLuint& texture, int width, int height) {
     return 0;
 }
 
+int SetupTexture_rgba32(GLuint& texture, int width, int height) {
+    if(glIsTexture(texture)) {
+        glBindTexture(GL_TEXTURE_2D, texture); CHECK_GL;
+    } else {
+        glGenTextures(1, &texture);
+        glBindTexture(GL_TEXTURE_2D, texture); CHECK_GL;
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR); CHECK_GL;
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR); CHECK_GL;
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,     GL_CLAMP_TO_EDGE); CHECK_GL;
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,     GL_CLAMP_TO_EDGE); CHECK_GL;
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_FLOAT, nullptr);
+    }
+    
+    glBindTexture(GL_TEXTURE_2D, 0); CHECK_GL;
+    return 0;
+}
+
 
 
 int SetupTextureData(GLuint& texture, int width, int height, const void * data) {

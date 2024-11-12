@@ -82,7 +82,7 @@ void GaussianFilterShaderTester::recalculateKernel(int w, int h, BLUR_DIR dir){
     int beginX = -w / 2;
     int beginY = -h / 2;
     float sum = 0.0;
-    float sigma = 13.5;
+    float sigma = 50.5;
     int size = w;  //or h
     for (int x = beginX; x < w/2; x++) {
         for (int y = beginY; y < h/2; y++) {
@@ -212,8 +212,8 @@ void GaussianFilterShaderTester::renderFrame1(int w, int h){
 
 void GaussianFilterShaderTester::doCompute(GLuint& inputTexture, GLuint& outputTexture, BLUR_DIR blurDir){
     
-    int dim_x = 16;
-	int dim_y = 16;
+    int dim_x = 32;
+	int dim_y = 32;
 	static float time = 0.0;
 	glBindTexture(GL_TEXTURE_2D, 0);
 	blurShader->Use(0);CHECK_GL;

@@ -4,6 +4,7 @@
 #include "GeometryShaderTester.h"
 #include "GaussianFilterShaderTester.h"
 #include "PhysicsCurve.h"
+#include "FluidField.h"
 #include "Sprite2d.h"
 #include "DDALine.h"
 #include "FFTLine.h"
@@ -159,12 +160,13 @@ int main(int, char**)
 	ShaderTester shaderTester;
 	GeometryShaderTester geoShaderTester;
 	//GaussianFilterShaderTester sprite;
-	PhysicsCurve curve;
-	FFTLine sprite;
+	//PhysicsCurve sprite;
+	//FFTLine sprite;
 	//DDALine sprite;
 	//shaderTester.init();
 	//geoShaderTester.init();
 	//curve.init();
+	FluidField sprite;
 	sprite.init(screenW, screenH);
 
 	// Main loop
